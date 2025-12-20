@@ -6,7 +6,7 @@
 
 ## ✨ Key Features
 
-- **⚡ Zero-Latency Monitoring:** Websocket-first architecture for immediate event detection.
+- **⚡ High-Throughput Batching:** Buffers events and flushes them in batches (up to 100 events/500ms) to maximize throughput.
 - **🛡️ Bulletproof Reliability:** Hybrid architecture (WS + Polling) ensures no events are missed.
 - **💾 WAL-Mode Storage:** Optimized SQLite engine capable of ingesting **300+ events/sec**.
 - **🔄 Smart Retries:** Exponential backoff system for failing webhook endpoints.
@@ -46,6 +46,31 @@
     ```bash
     npm start
     ```
+
+## 📨 Webhook Payloads
+
+Helios sends events in **batches** (JSON Arrays) to reduce server load.
+
+**Example Payload:**
+```json
+[
+  {
+    "id": 102,
+    "type": "account_change",
+    "address": "5QD...3s",
+    "slot": 238192041,
+    "timestamp": 1703084000000,
+    "data": "{\"lamports\":1000000,\"data\":\"<BASE64>\",\"owner\":\"111...\"}"
+  },
+  {
+    "id": 103,
+    "type": "program_logs",
+    "address": "9xQ...r2",
+    "signature": "5zz...9AA",
+    "data": "{\"logs\":[\"Program log: Instruction: Swap\"],\"err\":null}"
+  }
+]
+```
 
 ## 🎮 CLI Usage
 

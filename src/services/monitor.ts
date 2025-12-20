@@ -11,6 +11,12 @@ export class MonitorService {
   private pollInterval: NodeJS.Timeout | null = null;
   private webhookInterval: NodeJS.Timeout | null = null;
 
+  // Batching Configuration
+  private eventBuffer: any[] = [];
+  private flushTimer: NodeJS.Timeout | null = null;
+  private readonly BATCH_SIZE = 100;
+  private readonly FLUSH_TIMEOUT_MS = 500;
+
   constructor() {
     this.connection = new Connection(config.rpcUrl, {
       wsEndpoint: config.wssUrl,
@@ -27,6 +33,8 @@ export class MonitorService {
       this.subscribe(sub);
     }
 
+    // Start buffer flushing timer
+    this.startFlushTimer();
     // Start fallback polling
     this.startPolling();
     // Start webhook retry processor
@@ -36,6 +44,7 @@ export class MonitorService {
   stop() {
     if (this.pollInterval) clearInterval(this.pollInterval);
     if (this.webhookInterval) clearInterval(this.webhookInterval);
+    if (this.flushTimer) clearInterval(this.flushTimer);
 
     for (const { id, type } of this.subscriptionIds.values()) {
       if (type === 'account') {
@@ -45,6 +54,32 @@ export class MonitorService {
       }
     }
     this.subscriptionIds.clear();
+  }
+
+  private startFlushTimer() {
+    this.flushTimer = setInterval(() => {
+      this.flushBuffer();
+    }, this.FLUSH_TIMEOUT_MS);
+  }
+
+  private async flushBuffer() {
+    if (this.eventBuffer.length === 0) return;
+
+    // Take current buffer and reset
+    const batch = [...this.eventBuffer];
+    this.eventBuffer = [];
+
+    if (!config.webhookUrl) return;
+
+    try {
+      // Send as an array of events
+      await axios.post(config.webhookUrl, batch, { timeout: 10000 });
+    } catch (error: any) {
+      console.error(`Batch webhook dispatch failed: ${error.message}. Queueing ${batch.length} events.`);
+      // Queue the entire batch as a single payload for retry efficiency
+      // Note: passing 0 as eventId since this is a batch
+      dbService.queueWebhook(0, batch);
+    }
   }
 
   private subscribe(sub: SubscriptionRecord) {
@@ -105,7 +140,9 @@ export class MonitorService {
     };
 
     const eventId = dbService.saveEvent(event);
-    this.dispatchWebhook(event, eventId);
+    
+    // Add internal ID to payload for reference, then buffer
+    this.bufferEvent({ ...event, id: eventId });
   }
 
   private async handleLogs(sub: SubscriptionRecord, logs: Logs, context: Context) {
@@ -122,17 +159,15 @@ export class MonitorService {
     };
 
     const eventId = dbService.saveEvent(event);
-    this.dispatchWebhook(event, eventId);
+    this.bufferEvent({ ...event, id: eventId });
   }
 
-  private async dispatchWebhook(payload: any, eventId: number | bigint) {
-    if (!config.webhookUrl) return;
-
-    try {
-      await axios.post(config.webhookUrl, payload, { timeout: 5000 });
-    } catch (error: any) {
-      console.error(`Webhook dispatch failed: ${error.message}. Queueing for retry.`);
-      dbService.queueWebhook(eventId, payload);
+  private bufferEvent(payload: any) {
+    this.eventBuffer.push(payload);
+    
+    // If buffer is full, flush immediately
+    if (this.eventBuffer.length >= this.BATCH_SIZE) {
+      this.flushBuffer();
     }
   }
 
@@ -141,7 +176,8 @@ export class MonitorService {
       const pending = dbService.getPendingWebhooks();
       for (const item of pending) {
         try {
-          await axios.post(config.webhookUrl!, JSON.parse(item.payload), { timeout: 5000 });
+          // item.payload is already a JSON string (could be array or object)
+          await axios.post(config.webhookUrl!, JSON.parse(item.payload), { timeout: 10000 });
           dbService.markWebhookComplete(item.id);
           console.log(`Retry successful for webhook ${item.id}`);
         } catch (error: any) {
