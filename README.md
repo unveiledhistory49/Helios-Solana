@@ -2,7 +2,7 @@
 
 **Helios** is a high-performance, self-hosted sentinel for the Solana blockchain. It monitors accounts and programs in real-time, detecting on-chain events and dispatching them via reliable webhooks.
 
-![Solana](https://img.shields.io/badge/Solana-Uncorrelated-blueviolet) ![License](https://img.shields.io/badge/License-ISC-blue) ![Status](https://img.shields.io/badge/Status-Production%20Ready-success)
+![Solana](https://img.shields.io/badge/Solana-Uncorrelated-blueviolet) ![License](https://img.shields.io/badge/License-MIT-green) ![Status](https://img.shields.io/badge/Status-Production%20Ready-success)
 
 ## ✨ Key Features
 
