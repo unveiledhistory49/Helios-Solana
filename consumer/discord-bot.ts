@@ -33,23 +33,16 @@ app.post('/webhook', async (req, res) => {
   console.log(`📦 Received batch of ${events.length} events from Helios.`);
 
   for (const event of events) {
+    console.log(`🔍 Processing event type: ${event.type} for address: ${event.address}`);
     let message = '';
     const shortAddr = `${event.address.slice(0, 4)}...${event.address.slice(-4)}`;
     const explorerUrl = `https://solscan.io/account/${event.address}`;
 
-    if (event.type === 'account_change') {
-      const data = JSON.parse(event.data);
-      message = `🔔 **Account Update**\nAddress: 
-${shortAddr}
-Lamports: 
-${(data.lamports / 1e9).toFixed(4)} SOL
-[View on Solscan](${explorerUrl})`; 
+    if (event.type === 'account_change' || event.type === 'poll_change') {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      message = `🔔 **Account Update** (${event.type})\nAddress: \`${shortAddr}\`\nLamports: \`${(data.lamports / 1e9).toFixed(4)} SOL\`\n[View on Solscan](${explorerUrl})`;
     } else if (event.type === 'program_logs') {
-      message = `📜 **Program Logs**\nProgram: 
-${shortAddr}
-Signature: 
-${event.signature.slice(0, 8)}...
-[View Transaction](https://solscan.io/tx/${event.signature})`;
+      message = `📜 **Program Logs**\nProgram: \`${shortAddr}\`\nSignature: \`${event.signature.slice(0, 8)}...\`\n[View Transaction](https://solscan.io/tx/${event.signature})`;
     }
 
     // 2. Send to Discord
@@ -60,8 +53,10 @@ ${event.signature.slice(0, 8)}...
         console.error('Failed to send to Discord:', err.message);
       }
     } else {
-      console.log('📝 Discord Webhook URL not set. Logging message instead:');
+      console.log('------------------------------------------------');
+      console.log('📢 DISCORD MOCK MESSAGE:');
       console.log(message);
+      console.log('------------------------------------------------');
     }
   }
 
