@@ -1,0 +1,39 @@
+{
+  "name": "helios-solana",
+  "version": "1.0.0",
+  "description": "High-performance, self-hosted Solana account and program monitor.",
+  "main": "dist/index.js",
+  "bin": {
+    "helios": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "node --import tsx --test tests/**/*.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.0.3",
+    "@types/ws": "^8.18.1",
+    "axios": "^1.13.2",
+    "better-sqlite3": "^12.5.0",
+    "commander": "^14.0.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
+    "tsx": "^4.21.0"
+  }
+}
