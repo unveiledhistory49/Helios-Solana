@@ -3,6 +3,7 @@ export interface Config {
   wssUrl: string;
   dbPath: string;
   webhookUrl?: string;
+  webhookSecret?: string;
   port: number;
   pollIntervalMs: number;
 }

@@ -8,6 +8,7 @@ export const config: Config = {
   wssUrl: process.env.WSS_URL || 'wss://api.mainnet-beta.solana.com',
   dbPath: process.env.DB_PATH || './events.db',
   ...(process.env.WEBHOOK_URL ? { webhookUrl: process.env.WEBHOOK_URL } : {}),
+  ...(process.env.WEBHOOK_SECRET ? { webhookSecret: process.env.WEBHOOK_SECRET } : {}),
   port: parseInt(process.env.PORT || '3000', 10),
   pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS || '30000', 10),
 };

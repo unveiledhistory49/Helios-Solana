@@ -2,7 +2,7 @@ import { Connection, PublicKey, type Logs, type Context, type AccountInfo } from
 import { config } from '../utils/config.js';
 import { dbService, type SubscriptionRecord } from '../db/database.js';
 import axios from 'axios';
-import { createHash } from 'crypto';
+import { createHash, createHmac } from 'crypto';
 
 export class MonitorService {
   private connection: Connection;
@@ -62,6 +62,13 @@ export class MonitorService {
     }, this.FLUSH_TIMEOUT_MS);
   }
 
+  private getSignature(payload: string): string | null {
+    if (!config.webhookSecret) return null;
+    return createHmac('sha256', config.webhookSecret)
+      .update(payload)
+      .digest('hex');
+  }
+
   private async flushBuffer() {
     if (this.eventBuffer.length === 0) return;
 
@@ -72,8 +79,18 @@ export class MonitorService {
     if (!config.webhookUrl) return;
 
     try {
+      const payloadStr = JSON.stringify(batch);
+      const signature = this.getSignature(payloadStr);
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (signature) {
+        headers['X-Helios-Signature'] = signature;
+      }
+
       // Send as an array of events
-      await axios.post(config.webhookUrl, batch, { timeout: 10000 });
+      await axios.post(config.webhookUrl, payloadStr, { 
+        headers,
+        timeout: 10000 
+      });
     } catch (error: any) {
       console.error(`Batch webhook dispatch failed: ${error.message}. Queueing ${batch.length} events.`);
       // Queue the entire batch as a single payload for retry efficiency
@@ -177,7 +194,18 @@ export class MonitorService {
       for (const item of pending) {
         try {
           // item.payload is already a JSON string (could be array or object)
-          await axios.post(config.webhookUrl!, JSON.parse(item.payload), { timeout: 10000 });
+          // We need to calculate signature for the stored payload string
+          const signature = this.getSignature(item.payload);
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (signature) {
+            headers['X-Helios-Signature'] = signature;
+          }
+
+          await axios.post(config.webhookUrl!, item.payload, { 
+            headers,
+            timeout: 10000 
+          });
+          
           dbService.markWebhookComplete(item.id);
           console.log(`Retry successful for webhook ${item.id}`);
         } catch (error: any) {

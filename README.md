@@ -38,6 +38,7 @@
     RPC_URL=https://api.mainnet-beta.solana.com
     WSS_URL=wss://api.mainnet-beta.solana.com
     WEBHOOK_URL=https://your-api.com/webhooks/solana
+    WEBHOOK_SECRET=my_super_secret_key_123
     DB_PATH=./data/helios.db
     PORT=3000
     ```
@@ -46,6 +47,26 @@
     ```bash
     npm start
     ```
+
+## 🔒 Security & Verification
+
+Helios secures your webhooks using HMAC-SHA256 signatures.
+
+1.  Set `WEBHOOK_SECRET` in your `.env` file.
+2.  Helios will include a header `X-Helios-Signature` in every POST request.
+3.  **Verify the signature** on your backend to ensure the request is legitimate.
+
+**Node.js Verification Example:**
+```javascript
+const crypto = require('crypto');
+
+function verifySignature(req, secret) {
+  const signature = req.headers['x-helios-signature'];
+  const payload = JSON.stringify(req.body); // Ensure raw body matches
+  const hash = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  return hash === signature;
+}
+```
 
 ## 📨 Webhook Payloads
 
