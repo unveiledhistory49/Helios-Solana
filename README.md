@@ -13,6 +13,7 @@
 - **📈 Observability (v2.0):** Native Prometheus metrics endpoint (`/metrics`) for monitoring system health.
 - **🔗 Transaction Enrichment (v2.0):** Optionally fetch and include full transaction metadata in your webhooks.
 - **📡 Multicast Webhooks (v2.1):** Deliver events to multiple different URLs per subscription.
+- **🛠️ WASM Transformers (v3.0):** Inject custom WebAssembly modules to transform, filter, or anonymize data before dispatch.
 - **💾 WAL-Mode Storage:** Optimized SQLite engine capable of ingesting **1400+ events/sec**.
 - **🔄 Smart Retries:** Exponential backoff system for failing webhook endpoints.
 - **🐳 Docker Native:** Ready to deploy anywhere in seconds.
@@ -71,6 +72,9 @@ helios add <ADDRESS> --filter '{" > ": [{"var": "lamports"}, 1000000000]}'
 # Add with Multicast Webhooks (Send to multiple targets)
 helios add <ADDRESS> --webhook https://api1.com/hook https://api2.com/hook
 
+# Add with WASM Transformer (Custom logic injection)
+helios add <ADDRESS> --transformer ./path/to/transformer.wasm
+
 # Link an IDL for Program Instruction decoding
 helios idl-add <PROGRAM_ID> ./path/to/idl.json
 
@@ -121,6 +125,20 @@ Helios sends events in **batches** (JSON Arrays). If an IDL and Schema are provi
 
 ---
 
+## 🛠️ WASM Transformers (v3.0)
+
+Helios v3.0 introduces a powerful plugin system using WebAssembly. You can write custom logic in Rust, C++, or AssemblyScript to process events in the pipeline.
+
+**Common Use Cases:**
+- **Anonymization:** Strip sensitive fields (like owner addresses) before sending to a 3rd party.
+- **Complex Filtering:** Perform state-dependent filtering that JSON Logic can't handle.
+- **Data Enrichment:** Calculate deltas or aggregate data within the event payload.
+
+**ABI Specification:**
+Transformers must export `alloc(size: i32) -> i32` and `transform(ptr: i32, len: i32) -> i64`.
+
+---
+
 ## 📊 Observability
 
 Helios exposes a Prometheus-compatible metrics endpoint at `http://localhost:3000/metrics`.
@@ -162,4 +180,5 @@ node --import tsx --test tests/load_test.ts
 
 Planned improvements include:
 - **Web UI:** A lightweight dashboard to manage subscriptions and view event history.
-- **WASM Transformers:** Allow users to upload custom WASM modules to transform event data before delivery.
+- [x] **WASM Transformers:** Allow users to upload custom WASM modules to transform event data before delivery. (Completed in v3.0)
+

@@ -2,6 +2,7 @@ import { Connection, PublicKey, type Logs, type Context, type AccountInfo } from
 import { config } from '../utils/config.js';
 import { dbService, type SubscriptionRecord } from '../db/database.js';
 import { decoderService } from './decoder.js';
+import { WasmEngine } from './wasm_engine.js';
 import axios from 'axios';
 import { createHash, createHmac } from 'crypto';
 import jsonLogic from 'json-logic-js';
@@ -11,6 +12,7 @@ export class MonitorService {
   private connection: Connection;
   private subscriptionIds: Map<string, { id: number; type: 'account' | 'program' }> = new Map();
   private subscriptionMap: Map<string, SubscriptionRecord> = new Map();
+  private wasmEngines: Map<string, WasmEngine> = new Map();
   private lastAccountState: Map<string, string> = new Map();
   private pollInterval: NodeJS.Timeout | null = null;
   private webhookInterval: NodeJS.Timeout | null = null;
@@ -40,7 +42,7 @@ export class MonitorService {
     metrics.activeSubscriptions.set(subs.length);
 
     for (const sub of subs) {
-      this.subscribe(sub);
+      await this.subscribe(sub);
     }
 
     // Start buffer flushing timer
@@ -149,8 +151,21 @@ export class MonitorService {
     }
   }
 
-  private subscribe(sub: SubscriptionRecord) {
+  private async subscribe(sub: SubscriptionRecord) {
     this.subscriptionMap.set(sub.address, sub);
+
+    // Load Transformer if needed
+    if (sub.transformer_path && !this.wasmEngines.has(sub.transformer_path)) {
+      try {
+        console.log(`Loading WASM transformer: ${sub.transformer_path}`);
+        const engine = new WasmEngine();
+        await engine.loadModule(sub.transformer_path);
+        this.wasmEngines.set(sub.transformer_path, engine);
+      } catch (e) {
+        console.error(`Failed to load transformer for ${sub.address}:`, e);
+      }
+    }
+
     if (this.subscriptionIds.has(sub.address)) return;
 
     const pubkey = new PublicKey(sub.address);
@@ -179,6 +194,24 @@ export class MonitorService {
     return createHash('sha256')
       .update(`${info.lamports}:${data}:${info.owner.toBase58()}`)
       .digest('hex');
+  }
+
+  private applyTransformer(sub: SubscriptionRecord, eventData: any): any | null {
+    if (!sub.transformer_path) return eventData;
+
+    const engine = this.wasmEngines.get(sub.transformer_path);
+    if (!engine) return eventData;
+
+    try {
+      const inputJson = JSON.stringify(eventData);
+      const outputJson = engine.runTransform(inputJson);
+      
+      if (outputJson === null) return null; // Filtered out
+      return JSON.parse(outputJson);
+    } catch (e) {
+      console.error(`Transformer failed for ${sub.address}:`, e);
+      return eventData;
+    }
   }
 
   private async handleAccountChange(
@@ -244,8 +277,12 @@ export class MonitorService {
 
     const eventId = dbService.saveEvent(event);
     
-    // Add internal ID to payload for reference, then buffer
-    this.bufferEvent({ ...event, id: eventId });
+    const eventForWebhook = { ...event, id: eventId };
+    const transformed = this.applyTransformer(sub, eventForWebhook);
+
+    if (transformed) {
+      this.bufferEvent(transformed);
+    }
   }
 
   private async handleLogs(sub: SubscriptionRecord, logs: Logs, context: Context) {
@@ -316,7 +353,13 @@ export class MonitorService {
     metrics.eventsIngested.inc({ type: 'program', source: 'websocket' });
 
     const eventId = dbService.saveEvent(event);
-    this.bufferEvent({ ...event, id: eventId });
+    
+    const eventForWebhook = { ...event, id: eventId };
+    const transformed = this.applyTransformer(sub, eventForWebhook);
+
+    if (transformed) {
+      this.bufferEvent(transformed);
+    }
   }
 
   private bufferEvent(payload: any) {
@@ -381,11 +424,13 @@ export class MonitorService {
     }, config.pollIntervalMs);
   }
 
-  async addSubscription(address: string, type: 'account' | 'program', label?: string) {
+  async addSubscription(address: string, type: 'account' | 'program', label?: string, transformerPath?: string) {
     const sub: SubscriptionRecord = { address, type };
     if (label) sub.label = label;
+    if (transformerPath) sub.transformer_path = transformerPath;
+    
     dbService.addSubscription(sub);
-    this.subscribe(sub);
+    await this.subscribe(sub);
   }
 }
 

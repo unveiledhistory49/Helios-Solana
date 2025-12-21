@@ -39,6 +39,7 @@ program
   .option('-s, --schema <schema>', 'Optional account schema name (for decoding)')
   .option('-f, --filter <filter>', 'Optional JSON Logic filter string')
   .option('-w, --webhook <url...>', 'Optional webhook URL(s) for this subscription')
+  .option('--transformer <path>', 'Optional path to WASM transformer module')
   .action(async (address, options) => {
     try {
       dbService.addSubscription({
@@ -47,9 +48,13 @@ program
         label: options.label,
         schema: options.schema,
         filter_rules: options.filter,
-        webhooks: options.webhook ? JSON.stringify(options.webhook) : undefined
+        webhooks: options.webhook ? JSON.stringify(options.webhook) : undefined,
+        transformer_path: options.transformer
       });
       console.log(`Added ${options.type} subscription for ${address}`);
+      if (options.transformer) {
+        console.log(`Linked transformer: ${options.transformer}`);
+      }
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
     }

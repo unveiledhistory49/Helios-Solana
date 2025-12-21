@@ -18,6 +18,7 @@ export interface SubscriptionRecord {
   schema?: string;
   filter_rules?: string;
   webhooks?: string; // JSON string of URL array
+  transformer_path?: string;
 }
 
 export class DatabaseService {
@@ -48,7 +49,8 @@ export class DatabaseService {
         label TEXT,
         schema TEXT,
         filter_rules TEXT,
-        webhooks TEXT
+        webhooks TEXT,
+        transformer_path TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_events_address ON events(address);
@@ -73,6 +75,7 @@ export class DatabaseService {
     
     // Migration helper for existing tables
     try { this.db.prepare("ALTER TABLE subscriptions ADD COLUMN webhooks TEXT").run(); } catch (e) {}
+    try { this.db.prepare("ALTER TABLE subscriptions ADD COLUMN transformer_path TEXT").run(); } catch (e) {}
     try { this.db.prepare("ALTER TABLE webhook_queue ADD COLUMN url TEXT").run(); } catch (e) {}
   }
 
@@ -113,10 +116,10 @@ export class DatabaseService {
 
   addSubscription(sub: SubscriptionRecord) {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO subscriptions (address, type, label, schema, filter_rules, webhooks)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO subscriptions (address, type, label, schema, filter_rules, webhooks, transformer_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    return stmt.run(sub.address, sub.type, sub.label || null, sub.schema || null, sub.filter_rules || null, sub.webhooks || null);
+    return stmt.run(sub.address, sub.type, sub.label || null, sub.schema || null, sub.filter_rules || null, sub.webhooks || null, sub.transformer_path || null);
   }
 
   getSubscriptions() {
