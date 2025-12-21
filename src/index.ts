@@ -37,13 +37,15 @@ program
   .option('-t, --type <type>', 'Type: account or program', 'account')
   .option('-l, --label <label>', 'Optional label for the address')
   .option('-s, --schema <schema>', 'Optional account schema name (for decoding)')
+  .option('-f, --filter <filter>', 'Optional JSON Logic filter string')
   .action(async (address, options) => {
     try {
       dbService.addSubscription({
         address,
         type: options.type as any,
         label: options.label,
-        schema: options.schema
+        schema: options.schema,
+        filter_rules: options.filter
       });
       console.log(`Added ${options.type} subscription for ${address}`);
     } catch (error: any) {

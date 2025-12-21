@@ -4,6 +4,8 @@ import { dbService, type SubscriptionRecord } from '../db/database.js';
 import { decoderService } from './decoder.js';
 import axios from 'axios';
 import { createHash, createHmac } from 'crypto';
+import jsonLogic from 'json-logic-js';
+import { metrics } from './metrics.js';
 
 export class MonitorService {
   private connection: Connection;
@@ -18,11 +20,15 @@ export class MonitorService {
   private readonly BATCH_SIZE = 100;
   private readonly FLUSH_TIMEOUT_MS = 500;
 
-  constructor() {
-    this.connection = new Connection(config.rpcUrl, {
-      wsEndpoint: config.wssUrl,
-      commitment: 'confirmed',
-    });
+  constructor(connection?: Connection) {
+    if (connection) {
+      this.connection = connection;
+    } else {
+      this.connection = new Connection(config.rpcUrl, {
+        wsEndpoint: config.wssUrl,
+        commitment: 'confirmed',
+      });
+    }
   }
 
   async start() {
@@ -30,6 +36,8 @@ export class MonitorService {
     const subs = dbService.getSubscriptions();
     console.log(`Loading ${subs.length} subscriptions from database.`);
     
+    metrics.activeSubscriptions.set(subs.length);
+
     for (const sub of subs) {
       this.subscribe(sub);
     }
@@ -46,6 +54,8 @@ export class MonitorService {
     if (this.pollInterval) clearInterval(this.pollInterval);
     if (this.webhookInterval) clearInterval(this.webhookInterval);
     if (this.flushTimer) clearInterval(this.flushTimer);
+
+    metrics.activeSubscriptions.set(0);
 
     for (const { id, type } of this.subscriptionIds.values()) {
       if (type === 'account') {
@@ -76,9 +86,11 @@ export class MonitorService {
     // Take current buffer and reset
     const batch = [...this.eventBuffer];
     this.eventBuffer = [];
+    metrics.bufferDepth.set(0);
 
     if (!config.webhookUrl) return;
 
+    const timer = metrics.webhookDuration.startTimer();
     try {
       const payloadStr = JSON.stringify(batch);
       const signature = this.getSignature(payloadStr);
@@ -92,7 +104,10 @@ export class MonitorService {
         headers,
         timeout: 10000 
       });
+      timer(); // End timer
     } catch (error: any) {
+      timer();
+      metrics.webhookFailures.inc({ reason: error.code || 'unknown' });
       console.error(`Batch webhook dispatch failed: ${error.message}. Queueing ${batch.length} events.`);
       // Queue the entire batch as a single payload for retry efficiency
       // Note: passing 0 as eventId since this is a batch
@@ -153,6 +168,26 @@ export class MonitorService {
       decoded = await decoderService.decodeAccountData(ownerStr, sub.schema, dataStr);
     }
 
+    // Filter Check
+    if (sub.filter_rules) {
+      try {
+        const rules = JSON.parse(sub.filter_rules);
+        const logicData = {
+          lamports: accountInfo.lamports,
+          owner: ownerStr,
+          executable: accountInfo.executable,
+          parsed: decoded || {}
+        };
+        
+        if (!jsonLogic.apply(rules, logicData)) {
+          // Event filtered out
+          return;
+        }
+      } catch (e) {
+        console.error(`Error applying filter for ${sub.address}:`, e);
+      }
+    }
+
     const event = {
       type: source === 'websocket' ? 'account_change' : 'poll_change',
       address: sub.address,
@@ -167,6 +202,8 @@ export class MonitorService {
       }),
       parsed: decoded,
     };
+
+    metrics.eventsIngested.inc({ type: 'account', source });
 
     const eventId = dbService.saveEvent(event);
     
@@ -200,6 +237,24 @@ export class MonitorService {
       // Transaction might not be available yet or parsing failed
     }
 
+    // Filter Check
+    if (sub.filter_rules) {
+      try {
+        const rules = JSON.parse(sub.filter_rules);
+        const logicData = {
+          logs: logs.logs,
+          signature: logs.signature,
+          parsed: decoded || {}
+        };
+        
+        if (!jsonLogic.apply(rules, logicData)) {
+          return;
+        }
+      } catch (e) {
+        console.error(`Error applying filter for logs ${sub.address}:`, e);
+      }
+    }
+
     const event = {
       type: 'program_logs',
       address: sub.address,
@@ -213,12 +268,15 @@ export class MonitorService {
       parsed: decoded
     };
 
+    metrics.eventsIngested.inc({ type: 'program', source: 'websocket' });
+
     const eventId = dbService.saveEvent(event);
     this.bufferEvent({ ...event, id: eventId });
   }
 
   private bufferEvent(payload: any) {
     this.eventBuffer.push(payload);
+    metrics.bufferDepth.set(this.eventBuffer.length);
     
     // If buffer is full, flush immediately
     if (this.eventBuffer.length >= this.BATCH_SIZE) {

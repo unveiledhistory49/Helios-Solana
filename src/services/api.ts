@@ -1,12 +1,22 @@
 import express from 'express';
-import { config } from '../utils/config.js';
 import { dbService } from '../db/database.js';
-import { monitorService } from '../services/monitor.js';
+import { config } from '../utils/config.js';
+import { monitorService } from './monitor.js';
+import { metricsRegistry } from './metrics.js';
 
 const app = express();
 app.use(express.json());
 
-app.get('/health', (req, res) => {
+app.get('/metrics', async (_req, res) => {
+  try {
+    res.set('Content-Type', metricsRegistry.contentType);
+    res.end(await metricsRegistry.metrics());
+  } catch (ex) {
+    res.status(500).end(ex);
+  }
+});
+
+app.get('/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 

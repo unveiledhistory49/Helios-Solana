@@ -16,6 +16,7 @@ export interface SubscriptionRecord {
   type: 'account' | 'program';
   label?: string;
   schema?: string;
+  filter_rules?: string; // JSON string of the logic rule
 }
 
 export class DatabaseService {
@@ -44,7 +45,8 @@ export class DatabaseService {
         address TEXT PRIMARY KEY,
         type TEXT NOT NULL,
         label TEXT,
-        schema TEXT
+        schema TEXT,
+        filter_rules TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_events_address ON events(address);
@@ -104,10 +106,10 @@ export class DatabaseService {
 
   addSubscription(sub: SubscriptionRecord) {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO subscriptions (address, type, label, schema)
-      VALUES (?, ?, ?, ?)
+      INSERT OR REPLACE INTO subscriptions (address, type, label, schema, filter_rules)
+      VALUES (?, ?, ?, ?, ?)
     `);
-    return stmt.run(sub.address, sub.type, sub.label || null, sub.schema || null);
+    return stmt.run(sub.address, sub.type, sub.label || null, sub.schema || null, sub.filter_rules || null);
   }
 
   getSubscriptions() {
@@ -146,16 +148,24 @@ export class DatabaseService {
   }
 
   markWebhookFailed(id: number) {
-    // Exponential backoff: retry_count^2 * 1000ms (1s, 4s, 9s, 16s...)
+    // Exponential backoff: (retry_count + 1)^2 * 1000ms
     // Max retries = 5, then fail permanently
     const stmt = this.db.prepare(`
       UPDATE webhook_queue 
       SET retry_count = retry_count + 1,
-          next_retry = ? + (retry_count * retry_count * 1000),
+          next_retry = ? + ((retry_count + 1) * (retry_count + 1) * 1000),
           status = CASE WHEN retry_count >= 5 THEN 'failed' ELSE 'pending' END
       WHERE id = ?
     `);
     return stmt.run(Date.now(), id);
+  }
+
+  // Helper for testing
+  reset() {
+    this.db.prepare('DELETE FROM events').run();
+    this.db.prepare('DELETE FROM subscriptions').run();
+    this.db.prepare('DELETE FROM webhook_queue').run();
+    this.db.prepare('DELETE FROM idls').run();
   }
 }
 
