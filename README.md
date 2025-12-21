@@ -6,9 +6,10 @@
 
 ## ✨ Key Features
 
-- **⚡ High-Throughput Batching:** Buffers events and flushes them in batches (up to 100 events/500ms) to maximize throughput.
+- **⚡ High-Throughput Batching:** Buffers events and flushes them in batches (up to 100 events/500ms).
 - **🛡️ Bulletproof Reliability:** Hybrid architecture (WS + Polling) ensures no events are missed.
-- **💾 WAL-Mode Storage:** Optimized SQLite engine capable of ingesting **300+ events/sec**.
+- **🧠 Intelligent Decoding (v2.0):** Integrated Anchor/Borsh support. Automatically decode account data and instructions into human-readable JSON.
+- **💾 WAL-Mode Storage:** Optimized SQLite engine for high-speed event ingestion.
 - **🔄 Smart Retries:** Exponential backoff system for failing webhook endpoints.
 - **🐳 Docker Native:** Ready to deploy anywhere in seconds.
 
@@ -95,23 +96,18 @@ Helios sends events in **batches** (JSON Arrays) to reduce server load.
 
 ## 🎮 CLI Usage
 
-Helios comes with a powerful CLI to manage your watch list on the fly.
+Helios comes with a powerful CLI to manage your watch list and IDLs.
 
 ```bash
-# Link the binary (optional)
-npm link
+# Add a watch target with an optional schema for decoding
+helios add <ADDRESS> --type account --schema "MyAccountType"
 
-# Add a watch target (Account)
-helios add <ADDRESS> --type account --label "Treasury Wallet"
+# Link an IDL to a program for automatic instruction decoding
+helios idl-add <PROGRAM_ID> ./path/to/idl.json
 
-# Add a watch target (Program Logs)
-helios add <PROGRAM_ID> --type program --label "DEX V3"
-
-# List active sentinels
+# List active sentinels & IDLs
 helios list
-
-# Remove a target
-helios remove <ADDRESS>
+helios idl-list
 ```
 
 ## 🐳 Docker Deployment
@@ -140,4 +136,7 @@ docker run -d \
 
 ## 🔮 Roadmap
 
-Planned v2.0 improvements include webhook batching, HMAC signing, and transaction decoding.
+Planned improvements include:
+- **Advanced Filtering:** Rule-based engine (JSON Logic) to filter events before they hit your webhook.
+- **Prometheus Metrics:** Integrated monitoring for webhook delivery rates and latency.
+- **Transaction Enrichment:** Optional fetching of full transaction metadata for all events.

@@ -1,6 +1,7 @@
 import { Connection, PublicKey, type Logs, type Context, type AccountInfo } from '@solana/web3.js';
 import { config } from '../utils/config.js';
 import { dbService, type SubscriptionRecord } from '../db/database.js';
+import { decoderService } from './decoder.js';
 import axios from 'axios';
 import { createHash, createHmac } from 'crypto';
 
@@ -142,6 +143,16 @@ export class MonitorService {
     if (currentHash === lastHash) return;
     this.lastAccountState.set(sub.address, currentHash);
 
+    const dataStr = accountInfo.data.toString('base64');
+    const ownerStr = accountInfo.owner.toBase58();
+
+    let decoded = null;
+    if (sub.schema) {
+      // If a specific schema (account name) is provided, try decoding it
+      // using the owner program as the IDL source.
+      decoded = await decoderService.decodeAccountData(ownerStr, sub.schema, dataStr);
+    }
+
     const event = {
       type: source === 'websocket' ? 'account_change' : 'poll_change',
       address: sub.address,
@@ -150,10 +161,11 @@ export class MonitorService {
       timestamp: Date.now(),
       data: JSON.stringify({
         lamports: accountInfo.lamports,
-        data: accountInfo.data.toString('base64'),
-        owner: accountInfo.owner.toBase58(),
+        data: dataStr,
+        owner: ownerStr,
         executable: accountInfo.executable,
       }),
+      parsed: decoded,
     };
 
     const eventId = dbService.saveEvent(event);
@@ -163,6 +175,31 @@ export class MonitorService {
   }
 
   private async handleLogs(sub: SubscriptionRecord, logs: Logs, context: Context) {
+    let decoded = null;
+    
+    // Attempt to decode the instruction if we have an IDL for this program
+    try {
+      const tx = await this.connection.getParsedTransaction(logs.signature, {
+        maxSupportedTransactionVersion: 0,
+        commitment: 'confirmed'
+      });
+      
+      if (tx && tx.transaction.message.instructions) {
+        // Find the instruction that belongs to our subscribed program
+        // This is a simplified approach, real transactions might have many calls.
+        const relevantIxs = tx.transaction.message.instructions.filter(ix => 
+          ix.programId.toBase58() === sub.address && 'data' in ix
+        );
+
+        if (relevantIxs.length > 0) {
+          const ixData = (relevantIxs[0] as any).data; // Base58 encoded in parsed tx
+          decoded = await decoderService.decodeInstruction(sub.address, ixData);
+        }
+      }
+    } catch (err) {
+      // Transaction might not be available yet or parsing failed
+    }
+
     const event = {
       type: 'program_logs',
       address: sub.address,
@@ -173,6 +210,7 @@ export class MonitorService {
         logs: logs.logs,
         err: logs.err,
       }),
+      parsed: decoded
     };
 
     const eventId = dbService.saveEvent(event);

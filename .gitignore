@@ -28,3 +28,6 @@ Thumbs.db
 .vscode
 .idea
 *.swp
+*.log
+*.db-shm
+*.db-wal

@@ -15,7 +15,7 @@ async function runSystemTest() {
   
   // 2. Start the Discord Consumer in a sub-process
   console.log('📡 Starting Discord Consumer...');
-  const consumer = spawn('npx', ['tsx', 'consumer/discord-bot.ts'], {
+  const consumer = spawn('node', ['--import', 'tsx', 'consumer/discord-bot.ts'], {
     env: { ...process.env, CONSUMER_PORT: CONSUMER_PORT.toString(), WEBHOOK_SECRET: HELIOS_SECRET }
   });
 
@@ -23,7 +23,7 @@ async function runSystemTest() {
   consumer.stderr.on('data', (data) => console.error(`[Consumer Error] ${data}`));
 
   // Wait for consumer to warm up
-  await new Promise(r => setTimeout(r, 2000));
+  await new Promise(r => setTimeout(r, 5000));
 
   // 3. Start Helios
   const monitor = new MonitorService();

@@ -15,6 +15,7 @@ export interface SubscriptionRecord {
   address: string;
   type: 'account' | 'program';
   label?: string;
+  schema?: string;
 }
 
 export class DatabaseService {
@@ -42,7 +43,8 @@ export class DatabaseService {
       CREATE TABLE IF NOT EXISTS subscriptions (
         address TEXT PRIMARY KEY,
         type TEXT NOT NULL,
-        label TEXT
+        label TEXT,
+        schema TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_events_address ON events(address);
@@ -56,7 +58,32 @@ export class DatabaseService {
         next_retry INTEGER NOT NULL,
         status TEXT DEFAULT 'pending'
       );
+
+      CREATE TABLE IF NOT EXISTS idls (
+        program_id TEXT PRIMARY KEY,
+        idl_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
+  }
+
+  saveIdl(programId: string, idl: any) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO idls (program_id, idl_json, updated_at)
+      VALUES (?, ?, ?)
+    `);
+    return stmt.run(programId, JSON.stringify(idl), Date.now());
+  }
+
+  getIdl(programId: string) {
+    const stmt = this.db.prepare(`SELECT idl_json FROM idls WHERE program_id = ?`);
+    const result = stmt.get(programId) as { idl_json: string } | undefined;
+    return result ? JSON.parse(result.idl_json) : null;
+  }
+
+  getIdlList() {
+    const stmt = this.db.prepare(`SELECT program_id, updated_at FROM idls`);
+    return stmt.all() as { program_id: string, updated_at: number }[];
   }
 
   saveEvent(event: EventRecord) {
@@ -77,10 +104,10 @@ export class DatabaseService {
 
   addSubscription(sub: SubscriptionRecord) {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO subscriptions (address, type, label)
-      VALUES (?, ?, ?)
+      INSERT OR REPLACE INTO subscriptions (address, type, label, schema)
+      VALUES (?, ?, ?, ?)
     `);
-    return stmt.run(sub.address, sub.type, sub.label || null);
+    return stmt.run(sub.address, sub.type, sub.label || null, sub.schema || null);
   }
 
   getSubscriptions() {
