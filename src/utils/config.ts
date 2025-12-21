@@ -11,4 +11,5 @@ export const config: Config = {
   ...(process.env.WEBHOOK_SECRET ? { webhookSecret: process.env.WEBHOOK_SECRET } : {}),
   port: parseInt(process.env.PORT || '3000', 10),
   pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS || '30000', 10),
+  enrichTransactions: process.env.ENRICH_TRANSACTIONS === 'true',
 };

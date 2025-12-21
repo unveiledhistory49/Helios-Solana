@@ -6,6 +6,7 @@ export interface Config {
   webhookSecret?: string;
   port: number;
   pollIntervalMs: number;
+  enrichTransactions: boolean;
 }
 
 export interface WatchTarget {

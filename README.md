@@ -11,6 +11,7 @@
 - **🧠 Intelligent Decoding (v2.0):** Integrated Anchor/Borsh support. Automatically decode account data and instructions into human-readable JSON.
 - **🔍 Advanced Filtering (v2.0):** Filter noise at the source using JSON Logic. Only receive events that match your specific criteria.
 - **📈 Observability (v2.0):** Native Prometheus metrics endpoint (`/metrics`) for monitoring system health.
+- **🔗 Transaction Enrichment (v2.0):** Optionally fetch and include full transaction metadata in your webhooks.
 - **💾 WAL-Mode Storage:** Optimized SQLite engine capable of ingesting **1400+ events/sec**.
 - **🔄 Smart Retries:** Exponential backoff system for failing webhook endpoints.
 - **🐳 Docker Native:** Ready to deploy anywhere in seconds.
@@ -42,6 +43,7 @@
     WEBHOOK_SECRET=your_hmac_secret
     DB_PATH=./events.db
     PORT=3000
+    ENRICH_TRANSACTIONS=true
     ```
 
 3.  **Launch:**
@@ -155,5 +157,5 @@ node --import tsx --test tests/load_test.ts
 ## 🔮 Roadmap
 
 Planned improvements include:
-- **Transaction Enrichment:** Optional fetching of full transaction metadata for all events.
 - **Web UI:** A lightweight dashboard to manage subscriptions and view event history.
+- **Multicast Webhooks:** Ability to send events to multiple different URLs per subscription.

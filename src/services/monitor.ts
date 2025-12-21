@@ -176,7 +176,8 @@ export class MonitorService {
           lamports: accountInfo.lamports,
           owner: ownerStr,
           executable: accountInfo.executable,
-          parsed: decoded || {}
+          parsed: decoded || {},
+          enrichment: null
         };
         
         if (!jsonLogic.apply(rules, logicData)) {
@@ -201,6 +202,7 @@ export class MonitorService {
         executable: accountInfo.executable,
       }),
       parsed: decoded,
+      enrichment: null
     };
 
     metrics.eventsIngested.inc({ type: 'account', source });
@@ -213,6 +215,7 @@ export class MonitorService {
 
   private async handleLogs(sub: SubscriptionRecord, logs: Logs, context: Context) {
     let decoded = null;
+    let enrichment = null;
     
     // Attempt to decode the instruction if we have an IDL for this program
     try {
@@ -221,16 +224,21 @@ export class MonitorService {
         commitment: 'confirmed'
       });
       
-      if (tx && tx.transaction.message.instructions) {
-        // Find the instruction that belongs to our subscribed program
-        // This is a simplified approach, real transactions might have many calls.
-        const relevantIxs = tx.transaction.message.instructions.filter(ix => 
-          ix.programId.toBase58() === sub.address && 'data' in ix
-        );
+      if (tx) {
+        if (config.enrichTransactions) {
+          enrichment = tx;
+        }
 
-        if (relevantIxs.length > 0) {
-          const ixData = (relevantIxs[0] as any).data; // Base58 encoded in parsed tx
-          decoded = await decoderService.decodeInstruction(sub.address, ixData);
+        if (tx.transaction.message.instructions) {
+          // Find the instruction that belongs to our subscribed program
+          const relevantIxs = tx.transaction.message.instructions.filter(ix => 
+            ix.programId.toBase58() === sub.address && 'data' in ix
+          );
+
+          if (relevantIxs.length > 0) {
+            const ixData = (relevantIxs[0] as any).data; // Base58 encoded in parsed tx
+            decoded = await decoderService.decodeInstruction(sub.address, ixData);
+          }
         }
       }
     } catch (err) {
@@ -244,7 +252,8 @@ export class MonitorService {
         const logicData = {
           logs: logs.logs,
           signature: logs.signature,
-          parsed: decoded || {}
+          parsed: decoded || {},
+          enrichment: enrichment || {}
         };
         
         if (!jsonLogic.apply(rules, logicData)) {
@@ -265,7 +274,8 @@ export class MonitorService {
         logs: logs.logs,
         err: logs.err,
       }),
-      parsed: decoded
+      parsed: decoded,
+      enrichment: enrichment
     };
 
     metrics.eventsIngested.inc({ type: 'program', source: 'websocket' });
