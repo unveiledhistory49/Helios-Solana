@@ -10,6 +10,7 @@ import { metrics } from './metrics.js';
 export class MonitorService {
   private connection: Connection;
   private subscriptionIds: Map<string, { id: number; type: 'account' | 'program' }> = new Map();
+  private subscriptionMap: Map<string, SubscriptionRecord> = new Map();
   private lastAccountState: Map<string, string> = new Map();
   private pollInterval: NodeJS.Timeout | null = null;
   private webhookInterval: NodeJS.Timeout | null = null;
@@ -84,12 +85,45 @@ export class MonitorService {
     if (this.eventBuffer.length === 0) return;
 
     // Take current buffer and reset
-    const batch = [...this.eventBuffer];
+    const buffer = [...this.eventBuffer];
     this.eventBuffer = [];
     metrics.bufferDepth.set(0);
 
-    if (!config.webhookUrl) return;
+    const batches = new Map<string, any[]>();
 
+    const addToBatch = (url: string, event: any) => {
+      if (!batches.has(url)) batches.set(url, []);
+      batches.get(url)!.push(event);
+    };
+
+    for (const event of buffer) {
+      // Global Webhook
+      if (config.webhookUrl) {
+        addToBatch(config.webhookUrl, event);
+      }
+
+      // Per-Subscription Webhooks
+      const sub = this.subscriptionMap.get(event.address);
+      if (sub && sub.webhooks) {
+        try {
+          const urls = JSON.parse(sub.webhooks);
+          if (Array.isArray(urls)) {
+            for (const url of urls) {
+              addToBatch(url, event);
+            }
+          }
+        } catch (e) {
+          console.error(`Invalid webhooks JSON for ${event.address}`, e);
+        }
+      }
+    }
+
+    for (const [url, batch] of batches) {
+      this.sendBatch(url, batch);
+    }
+  }
+
+  private async sendBatch(url: string, batch: any[]) {
     const timer = metrics.webhookDuration.startTimer();
     try {
       const payloadStr = JSON.stringify(batch);
@@ -100,7 +134,7 @@ export class MonitorService {
       }
 
       // Send as an array of events
-      await axios.post(config.webhookUrl, payloadStr, { 
+      await axios.post(url, payloadStr, { 
         headers,
         timeout: 10000 
       });
@@ -108,14 +142,15 @@ export class MonitorService {
     } catch (error: any) {
       timer();
       metrics.webhookFailures.inc({ reason: error.code || 'unknown' });
-      console.error(`Batch webhook dispatch failed: ${error.message}. Queueing ${batch.length} events.`);
+      console.error(`Batch webhook dispatch failed to ${url}: ${error.message}. Queueing ${batch.length} events.`);
       // Queue the entire batch as a single payload for retry efficiency
       // Note: passing 0 as eventId since this is a batch
-      dbService.queueWebhook(0, batch);
+      dbService.queueWebhook(0, batch, url);
     }
   }
 
   private subscribe(sub: SubscriptionRecord) {
+    this.subscriptionMap.set(sub.address, sub);
     if (this.subscriptionIds.has(sub.address)) return;
 
     const pubkey = new PublicKey(sub.address);
@@ -307,7 +342,14 @@ export class MonitorService {
             headers['X-Helios-Signature'] = signature;
           }
 
-          await axios.post(config.webhookUrl!, item.payload, { 
+          const url = item.url || config.webhookUrl;
+          if (!url) {
+            console.error(`No webhook URL for retry item ${item.id}`);
+            dbService.markWebhookFailed(item.id);
+            continue;
+          }
+
+          await axios.post(url, item.payload, { 
             headers,
             timeout: 10000 
           });

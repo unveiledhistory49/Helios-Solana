@@ -38,6 +38,7 @@ program
   .option('-l, --label <label>', 'Optional label for the address')
   .option('-s, --schema <schema>', 'Optional account schema name (for decoding)')
   .option('-f, --filter <filter>', 'Optional JSON Logic filter string')
+  .option('-w, --webhook <url...>', 'Optional webhook URL(s) for this subscription')
   .action(async (address, options) => {
     try {
       dbService.addSubscription({
@@ -45,7 +46,8 @@ program
         type: options.type as any,
         label: options.label,
         schema: options.schema,
-        filter_rules: options.filter
+        filter_rules: options.filter,
+        webhooks: options.webhook ? JSON.stringify(options.webhook) : undefined
       });
       console.log(`Added ${options.type} subscription for ${address}`);
     } catch (error: any) {

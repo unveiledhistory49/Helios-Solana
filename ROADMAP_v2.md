@@ -29,10 +29,15 @@ This document outlines the strategic development path for **Helios v2.0**. The p
 - [x] Optional full transaction metadata fetching
 - [x] Enrichment field in webhook payload
 
+### Phase 6: Multicast Webhooks (v2.1) - ✅ Completed
+- [x] Schema support for multiple URLs per subscription
+- [x] Multicast dispatch logic
+- [x] Per-URL retry queues
+- [x] CLI support (`--webhook`)
+
 ---
 
 ## 🔮 Future Roadmap (v3.0)
 
 - **Web UI:** A lightweight dashboard to manage subscriptions and view event history.
-- **Multicast Webhooks:** Ability to send events to multiple different URLs per subscription.
 - **WASM Transformers:** Allow users to upload custom WASM modules to transform event data before delivery.

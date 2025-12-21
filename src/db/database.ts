@@ -16,7 +16,8 @@ export interface SubscriptionRecord {
   type: 'account' | 'program';
   label?: string;
   schema?: string;
-  filter_rules?: string; // JSON string of the logic rule
+  filter_rules?: string;
+  webhooks?: string; // JSON string of URL array
 }
 
 export class DatabaseService {
@@ -46,7 +47,8 @@ export class DatabaseService {
         type TEXT NOT NULL,
         label TEXT,
         schema TEXT,
-        filter_rules TEXT
+        filter_rules TEXT,
+        webhooks TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_events_address ON events(address);
@@ -56,6 +58,7 @@ export class DatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         event_id INTEGER,
         payload TEXT NOT NULL,
+        url TEXT NOT NULL,
         retry_count INTEGER DEFAULT 0,
         next_retry INTEGER NOT NULL,
         status TEXT DEFAULT 'pending'
@@ -67,6 +70,10 @@ export class DatabaseService {
         updated_at INTEGER NOT NULL
       );
     `);
+    
+    // Migration helper for existing tables
+    try { this.db.prepare("ALTER TABLE subscriptions ADD COLUMN webhooks TEXT").run(); } catch (e) {}
+    try { this.db.prepare("ALTER TABLE webhook_queue ADD COLUMN url TEXT").run(); } catch (e) {}
   }
 
   saveIdl(programId: string, idl: any) {
@@ -106,10 +113,10 @@ export class DatabaseService {
 
   addSubscription(sub: SubscriptionRecord) {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO subscriptions (address, type, label, schema, filter_rules)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO subscriptions (address, type, label, schema, filter_rules, webhooks)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
-    return stmt.run(sub.address, sub.type, sub.label || null, sub.schema || null, sub.filter_rules || null);
+    return stmt.run(sub.address, sub.type, sub.label || null, sub.schema || null, sub.filter_rules || null, sub.webhooks || null);
   }
 
   getSubscriptions() {
@@ -123,12 +130,12 @@ export class DatabaseService {
   }
 
   // Webhook Queue Methods
-  queueWebhook(eventId: number | bigint, payload: any) {
+  queueWebhook(eventId: number | bigint, payload: any, url: string) {
     const stmt = this.db.prepare(`
-      INSERT INTO webhook_queue (event_id, payload, next_retry, status)
-      VALUES (?, ?, ?, 'pending')
+      INSERT INTO webhook_queue (event_id, payload, url, next_retry, status)
+      VALUES (?, ?, ?, ?, 'pending')
     `);
-    return stmt.run(eventId, JSON.stringify(payload), Date.now());
+    return stmt.run(eventId, JSON.stringify(payload), url, Date.now());
   }
 
   getPendingWebhooks(limit = 10) {

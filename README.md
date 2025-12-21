@@ -12,6 +12,7 @@
 - **🔍 Advanced Filtering (v2.0):** Filter noise at the source using JSON Logic. Only receive events that match your specific criteria.
 - **📈 Observability (v2.0):** Native Prometheus metrics endpoint (`/metrics`) for monitoring system health.
 - **🔗 Transaction Enrichment (v2.0):** Optionally fetch and include full transaction metadata in your webhooks.
+- **📡 Multicast Webhooks (v2.1):** Deliver events to multiple different URLs per subscription.
 - **💾 WAL-Mode Storage:** Optimized SQLite engine capable of ingesting **1400+ events/sec**.
 - **🔄 Smart Retries:** Exponential backoff system for failing webhook endpoints.
 - **🐳 Docker Native:** Ready to deploy anywhere in seconds.
@@ -66,6 +67,9 @@ helios add <ADDRESS> --type account --schema "UserStats"
 
 # Add with Filtering (Only alert if lamports > 1 SOL)
 helios add <ADDRESS> --filter '{" > ": [{"var": "lamports"}, 1000000000]}'
+
+# Add with Multicast Webhooks (Send to multiple targets)
+helios add <ADDRESS> --webhook https://api1.com/hook https://api2.com/hook
 
 # Link an IDL for Program Instruction decoding
 helios idl-add <PROGRAM_ID> ./path/to/idl.json
@@ -158,4 +162,4 @@ node --import tsx --test tests/load_test.ts
 
 Planned improvements include:
 - **Web UI:** A lightweight dashboard to manage subscriptions and view event history.
-- **Multicast Webhooks:** Ability to send events to multiple different URLs per subscription.
+- **WASM Transformers:** Allow users to upload custom WASM modules to transform event data before delivery.
