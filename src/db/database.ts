@@ -14,11 +14,11 @@ export interface EventRecord {
 export interface SubscriptionRecord {
   address: string;
   type: 'account' | 'program';
-  label?: string;
-  schema?: string;
-  filter_rules?: string;
-  webhooks?: string; // JSON string of URL array
-  transformer_path?: string;
+  label?: string | undefined;
+  schema?: string | undefined;
+  filter_rules?: string | undefined;
+  webhooks?: string | undefined; // JSON string of URL array
+  transformer_path?: string | undefined;
 }
 
 export class DatabaseService {

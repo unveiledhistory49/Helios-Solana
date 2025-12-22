@@ -37,7 +37,11 @@
     ```
 
 2.  **Configure Environment:**
-    Create a `.env` file:
+    Copy the provided template and fill in your values:
+    ```bash
+    cp .env.example .env
+    ```
+    Key variables in `.env`:
     ```env
     RPC_URL=https://api.mainnet-beta.solana.com
     WSS_URL=wss://api.mainnet-beta.solana.com
@@ -136,6 +140,7 @@ Helios v3.0 introduces a powerful plugin system using WebAssembly. You can write
 
 **ABI Specification:**
 Transformers must export `alloc(size: i32) -> i32` and `transform(ptr: i32, len: i32) -> i64`.
+See [WASM_ABI.md](./WASM_ABI.md) for full implementation details and Rust examples.
 
 ---
 

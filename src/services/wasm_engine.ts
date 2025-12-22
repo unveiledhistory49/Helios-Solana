@@ -16,7 +16,11 @@ export class WasmEngine {
       // We can provide imports here if the WASM needs them (e.g. logging)
       const importObject = {
         env: {
-          // Future: Add logging or utility functions here
+          log: (ptr: number, len: number) => {
+            const mem = this.instance!.exports.memory as WebAssembly.Memory;
+            const bytes = new Uint8Array(mem.buffer, ptr, len);
+            console.log(`[WASM LOG] ${new TextDecoder().decode(bytes)}`);
+          },
           abort: () => console.error("WASM aborted"),
         }
       };

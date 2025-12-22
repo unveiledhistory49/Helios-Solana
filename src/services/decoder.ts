@@ -52,13 +52,56 @@ export class DecoderService {
     const coder = await this.getCoder(programId);
     if (!coder) return null;
 
-    try {
-      const data = Buffer.from(dataBase64, 'base64');
-      return coder.instruction.decode(data);
-    } catch (err) {
-      return null;
-    }
-  }
-}
+        try {
 
-export const decoderService = new DecoderService();
+          const data = Buffer.from(dataBase64, 'base64');
+
+          return coder.instruction.decode(data);
+
+        } catch (err) {
+
+          return null;
+
+        }
+
+      }
+
+    
+
+      async decodeEvent(programId: string, log: string) {
+
+        const coder = await this.getCoder(programId);
+
+        if (!coder) return null;
+
+    
+
+        try {
+
+          // Anchor events usually start with "Program data: " followed by base64
+
+          if (log.startsWith('Program data: ')) {
+
+            const data = log.replace('Program data: ', '');
+
+            return coder.events.decode(data);
+
+          }
+
+          return null;
+
+        } catch (err) {
+
+          return null;
+
+        }
+
+      }
+
+    }
+
+    
+
+    export const decoderService = new DecoderService();
+
+    
