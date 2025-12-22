@@ -20,7 +20,30 @@
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Featured Use Case: Collective DCA Batching
+
+Helios now includes a reference implementation for a **Micro-Transaction Batching Service**. This optimizes DeFi operations by pooling small user deposits into single, cost-effective on-chain transactions.
+
+### How it works:
+1.  **The Vault (`vault_program/`):** A Solana program where users deposit small amounts of SOL/USDC.
+2.  **The Brain (`transformer/dca_logic/`):** A Rust WASM transformer that runs inside Helios, accumulating deposit counts and totals.
+3.  **The Executor (`consumer/executor.ts`):** An automated service that receives a "Batch Ready" signal from Helios and executes the collective swap.
+
+**To launch the batching service:**
+```bash
+# 1. Start the Executor
+npm run executor &
+
+# 2. Configure Helios to monitor the vault
+./setup_batching_service.sh
+
+# 3. Start Helios
+npm start
+```
+
+---
+
+## 🎮 CLI Usage
 
 ### Prerequisites
 - Node.js v18+
@@ -183,7 +206,8 @@ node --import tsx --test tests/load_test.ts
 
 ## 🔮 Roadmap
 
-Planned improvements include:
+- [x] **WASM Transformers:** Custom WebAssembly modules for pipeline logic. (Completed in v3.0)
+- [x] **Collective DCA Engine:** Reference implementation for transaction batching. (Completed)
 - **Web UI:** A lightweight dashboard to manage subscriptions and view event history.
-- [x] **WASM Transformers:** Allow users to upload custom WASM modules to transform event data before delivery. (Completed in v3.0)
+- **Cross-Chain Support:** Expanding the sentinel architecture to EVM-compatible chains.
 

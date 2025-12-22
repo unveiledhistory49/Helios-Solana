@@ -36,46 +36,62 @@ test('Phase 4 - End-to-End Integration', async (t) => {
 
     await monitor.start();
 
-    // Add Subscription
-    dbService.addSubscription({
+    // Add IDL for the address
+    const mockIdl = {
+      version: "0.1.0",
+      name: "vault",
+      instructions: [
+        {
+          name: "deposit",
+          accounts: [{ name: "vault", isMut: true, isSigner: false }],
+          args: [{ name: "amount", type: "u64" }]
+        }
+      ]
+    };
+    dbService.saveIdl(address, mockIdl);
+
+    // Add Subscription (Program Type)
+    const sub = {
       address,
-      type: 'account',
+      type: 'program' as const,
       webhooks: JSON.stringify([executorUrl]),
       transformer_path: wasmPath
-    });
+    };
+    dbService.addSubscription(sub);
 
     // Manually inject into monitor
-    await (monitor as any).subscribe({
-      address,
-      type: 'account',
-      webhooks: JSON.stringify([executorUrl]),
-      transformer_path: wasmPath
-    });
+    await (monitor as any).subscribe(sub);
   });
 
-  await t.test('Simulate Accumulation (9 Events)', async () => {
+  await t.test('Simulate Accumulation (4 Events)', async () => {
     const address = 'So11111111111111111111111111111111111111112';
     
-    // Mock Account Info
-    const accountInfo = {
-      lamports: 1000000000,
-      owner: new PublicKey('11111111111111111111111111111111'),
-      data: Buffer.from('{"amount": 100000000}'), // 0.1 SOL (mock data format for our WASM)
-      executable: false,
-      rentEpoch: 0
-    };
+    // Mock getParsedTransaction
+    (connection as any).getParsedTransaction = async () => ({
+      transaction: {
+        message: {
+          instructions: [
+            {
+              programId: new PublicKey(address),
+              data: 'dummy_data'
+            }
+          ]
+        }
+      }
+    });
 
-    // Send 9 events
-    for (let i = 0; i < 9; i++) {
-      const uniqueAccountInfo = {
-        ...accountInfo,
-        lamports: accountInfo.lamports + i // Vary state to bypass deduplication
-      };
-      await monitorAny.handleAccountChange(
+    const { decoderService } = await import('../src/services/decoder.js');
+    (decoderService as any).decodeInstruction = async () => ({
+         name: 'deposit',
+         args: { amount: 100000000, user: 'UserX' }
+    });
+
+    // Send 4 events
+    for (let i = 0; i < 4; i++) {
+      await monitorAny.handleLogs(
         dbService.getSubscriptions()[0], 
-        uniqueAccountInfo, 
-        { slot: i }, 
-        'websocket'
+        { signature: `sig_${i}`, logs: [], err: null }, 
+        { slot: i }
       );
     }
     
@@ -85,30 +101,27 @@ test('Phase 4 - End-to-End Integration', async (t) => {
     // Give it a moment for HTTP requests
     await new Promise(r => setTimeout(r, 500));
 
-    assert.strictEqual(lastBatch, null, 'Should NOT have triggered webhook yet (Total ~0.9 SOL)');
+    assert.strictEqual(lastBatch, null, 'Should NOT have triggered webhook yet (Total ~0.4 SOL)');
   });
 
-  await t.test('Trigger Threshold (10th Event)', async () => {
-    const address = 'So11111111111111111111111111111111111111112';
-    
-    const accountInfo = {
-      lamports: 1000000000,
-      owner: new PublicKey('11111111111111111111111111111111'),
-      data: Buffer.from('{"amount": 100000000}'), // 0.1 SOL
-      executable: false,
-      rentEpoch: 0
+  await t.test('Trigger Threshold (5th Event)', async () => {
+    const logs = {
+      signature: 'sig_final',
+      logs: ['Program ... success'],
+      err: null
     };
 
-    // 10th Event
-    const uniqueAccountInfo10 = {
-        ...accountInfo,
-        lamports: accountInfo.lamports + 100 // Ensure unique
-    };
-    await monitorAny.handleAccountChange(
+    // Ensure mock remains
+    const { decoderService } = await import('../src/services/decoder.js');
+    (decoderService as any).decodeInstruction = async () => ({
+         name: 'deposit',
+         args: { amount: 100000000, user: 'UserFinal' }
+    });
+
+    await monitorAny.handleLogs(
         dbService.getSubscriptions()[0], 
-        uniqueAccountInfo10, 
-        { slot: 100 }, 
-        'websocket'
+        logs, 
+        { slot: 100 }
     );
 
     // Force flush
@@ -117,7 +130,7 @@ test('Phase 4 - End-to-End Integration', async (t) => {
     // Wait for HTTP
     await new Promise(r => setTimeout(r, 1000));
 
-    assert.ok(lastBatch, 'Should have triggered webhook (Total 1.0 SOL)');
+    assert.ok(lastBatch, 'Should have triggered webhook (Total 0.5 SOL)');
     assert.strictEqual(lastBatch!.length, 1, 'Batch should contain the triggered event payload');
   });
 

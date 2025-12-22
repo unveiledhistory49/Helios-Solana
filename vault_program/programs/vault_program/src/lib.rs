@@ -42,6 +42,26 @@ pub mod vault_program {
         msg!("Deposit successful. Total: {}", vault_state.total_deposited);
         Ok(())
     }
+
+    pub fn execute_collective_dca(ctx: Context<ExecuteCollectiveDca>, total_amount: u64) -> Result<()> {
+        let vault_state = &mut ctx.accounts.vault_state;
+        
+        require!(total_amount <= vault_state.total_deposited, VaultError::InsufficientFunds);
+        
+        // In a real scenario, we would perform a CPI to Jupiter/Raydium here.
+        // For this batching service demo, we simulate the swap by moving SOL to a "target" or just decreasing state.
+        
+        vault_state.total_deposited -= total_amount;
+        
+        msg!("Collective DCA executed for {} lamports", total_amount);
+        
+        emit!(BatchExecutedEvent {
+            total_amount,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -77,11 +97,30 @@ pub struct Deposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct ExecuteCollectiveDca<'info> {
+    #[account(mut, has_one = authority)]
+    pub vault_state: Account<'info, VaultState>,
+    
+    /// CHECK: The PDA holding funds
+    #[account(mut, seeds = [b"vault_pda"], bump)]
+    pub vault_pda: AccountInfo<'info>,
+
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 pub struct VaultState {
     pub total_deposited: u64,
     pub batch_count: u64,
     pub authority: Pubkey,
+}
+
+#[error_code]
+pub enum VaultError {
+    #[msg("Insufficient funds in vault for this batch")]
+    InsufficientFunds,
 }
 
 #[event]
@@ -90,4 +129,10 @@ pub struct DepositEvent {
     pub amount: u64,
     pub total_deposited: u64,
     pub batch_count: u64,
+}
+
+#[event]
+pub struct BatchExecutedEvent {
+    pub total_amount: u64,
+    pub timestamp: i64,
 }

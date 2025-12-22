@@ -1,15 +1,24 @@
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-// Persistent state
+// Persistent state across WASM calls (within the same engine instance)
 static ACCUMULATED_AMOUNT: AtomicU64 = AtomicU64::new(0);
-const THRESHOLD: u64 = 1_000_000_000; // 1.0 SOL
+static DEPOSIT_COUNT: AtomicU64 = AtomicU64::new(0);
+
+const BATCH_THRESHOLD_AMOUNT: u64 = 500_000_000; // 0.5 SOL
+const BATCH_THRESHOLD_COUNT: u64 = 5;           // Or 5 deposits
 
 #[derive(Deserialize, Serialize)]
 struct HeliosEvent {
     #[serde(rename = "type")]
     event_type: String,
-    data: String,
+    parsed: Option<ParsedData>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct ParsedData {
+    name: String,
+    args: Option<serde_json::Value>,
 }
 
 #[no_mangle]
@@ -25,19 +34,28 @@ pub extern "C" fn transform(ptr: *mut u8, len: usize) -> u64 {
     let input_data = unsafe { Vec::from_raw_parts(ptr, len, len) };
     let input_str = String::from_utf8_lossy(&input_data);
 
-    // 1. Parse Event
     if let Ok(event) = serde_json::from_str::<HeliosEvent>(&input_str) {
-        if event.event_type == "account_change" {
-             // Mock increment: 0.1 SOL
-            let amount = 100_000_000;
-            let current = ACCUMULATED_AMOUNT.fetch_add(amount, Ordering::SeqCst) + amount;
+        if let Some(parsed) = event.parsed {
+            if parsed.name == "deposit" {
+                let amount = parsed.args
+                    .and_then(|a| a.get("amount").and_then(|v| v.as_u64()))
+                    .unwrap_or(0);
 
-            if current >= THRESHOLD {
-                ACCUMULATED_AMOUNT.store(0, Ordering::SeqCst);
-                let result_ptr = input_data.as_ptr() as u64;
-                let result_len = input_data.len() as u64;
-                std::mem::forget(input_data);
-                return (result_ptr << 32) | result_len;
+                let current_amount = ACCUMULATED_AMOUNT.fetch_add(amount, Ordering::SeqCst) + amount;
+                let current_count = DEPOSIT_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+
+                // Trigger batch if either threshold is hit
+                if current_amount >= BATCH_THRESHOLD_AMOUNT || current_count >= BATCH_THRESHOLD_COUNT {
+                    // Reset accumulators for next batch
+                    ACCUMULATED_AMOUNT.store(0, Ordering::SeqCst);
+                    DEPOSIT_COUNT.store(0, Ordering::SeqCst);
+
+                    // Return the event to trigger the webhook/executor
+                    let result_ptr = input_data.as_ptr() as u64;
+                    let result_len = input_data.len() as u64;
+                    std::mem::forget(input_data);
+                    return (result_ptr << 32) | result_len;
+                }
             }
         }
     }

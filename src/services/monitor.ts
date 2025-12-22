@@ -210,7 +210,7 @@ export class MonitorService {
       return JSON.parse(outputJson);
     } catch (e) {
       console.error(`Transformer failed for ${sub.address}:`, e);
-      return eventData;
+      return null; // Fail-closed: do not send untransformed data if transformer is required
     }
   }
 
