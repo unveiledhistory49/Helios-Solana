@@ -1,34 +1,54 @@
 # Dependencies
-node_modules
+node_modules/
+.yarn/
+.pnp.*
 
 # Build output
-dist
-build
+dist/
+build/
+out/
+.next/
+.turbopack/
 
-# Environment variables
-.env
-.env.*
+# TypeScript
+*.tsbuildinfo
 
-# Database
-*.db
-*.db-journal
-*.db-wal
-*.sqlite
+# Test / coverage
+coverage/
 
 # Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+
+# Environment / secrets
+.env*
 
 # OS
 .DS_Store
 Thumbs.db
 
 # IDEs
-.vscode
-.idea
+.vscode/
+.idea/
 *.swp
-*.log
+
+# Vercel
+.vercel/
+
+# Turbo
+.turbo/
+
+# Rust / Cargo / Solana / Anchor
+target/
+**/target/
+*.rs.bk
+.anchor/
+test-ledger/
+*.db
+*.db-journal
 *.db-shm
 *.db-wal
-target/
+*.sqlite
